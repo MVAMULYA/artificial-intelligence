@@ -5,7 +5,6 @@ from aimacode.utils import expr
 
 from layers import BaseActionLayer, BaseLiteralLayer, makeNoOp, make_node
 
-
 class ActionLayer(BaseActionLayer):
 
     def _inconsistent_effects(self, actionA, actionB):
@@ -20,7 +19,9 @@ class ActionLayer(BaseActionLayer):
         layers.ActionNode
         """
         # TODO: implement this function
-        raise NotImplementedError
+                       
+        return (any(~effect in actionA.effects for effect in actionB.effects))
+              
 
 
     def _interference(self, actionA, actionB):
@@ -35,8 +36,7 @@ class ActionLayer(BaseActionLayer):
         layers.ActionNode
         """
         # TODO: implement this function
-        raise NotImplementedError
-
+        return (any(~effect in actionA.preconditions for effect in actionB.effects) or any(~effect in actionB.preconditions for effect in actionA.effects))
     def _competing_needs(self, actionA, actionB):
         """ Return True if any preconditions of the two actions are pairwise mutex in the parent layer
 
@@ -50,7 +50,7 @@ class ActionLayer(BaseActionLayer):
         layers.BaseLayer.parent_layer
         """
         # TODO: implement this function
-        raise NotImplementedError
+        return ( any(self.parent_layer.is_mutex(preconA,preconB) for preconA in actionA.preconditions for preconB in actionB.preconditions))
 
 
 class LiteralLayer(BaseLiteralLayer):
@@ -67,12 +67,12 @@ class LiteralLayer(BaseLiteralLayer):
         layers.BaseLayer.parent_layer
         """
         # TODO: implement this function
-        raise NotImplementedError
+        return (all(self.parent_layer.is_mutex(actionA,actionB) for actionA in self.parents[literalA] for actionB in self.parents[literalB] ) and all(self.parent_layer.is_mutex(actionB,actionA) for actionA in self.parents[literalA] for actionB in self.parents[literalB] ))
 
     def _negation(self, literalA, literalB):
         """ Return True if two literals are negations of each other """
         # TODO: implement this function
-        raise NotImplementedError
+        return (literalA == ~literalB ) 
 
 
 class PlanningGraph:
@@ -136,7 +136,15 @@ class PlanningGraph:
         Russell-Norvig 10.3.1 (3rd Edition)
         """
         # TODO: implement this function
-        raise NotImplementedError
+        self.fill()
+        levelsum = 0
+        for g in self.goal:
+            for levelcost,layer in enumerate(self.literal_layers):
+                if g in layer:
+                    levelsum += levelcost
+                    break
+        return levelsum    
+        
 
     def h_maxlevel(self):
         """ Calculate the max level heuristic for the planning graph
@@ -166,7 +174,17 @@ class PlanningGraph:
         WARNING: you should expect long runtimes using this heuristic with A*
         """
         # TODO: implement maxlevel heuristic
-        raise NotImplementedError
+        self.fill()
+        maxlevel = 0
+        levelcosts = []
+        for g in self.goal:
+            for levelcost,layer in enumerate(self.literal_layers):
+                if g in layer:
+                    levelcosts.append(levelcost)
+                    break
+        maxlevel = max(levelcosts)
+        return maxlevel
+        
 
     def h_setlevel(self):
         """ Calculate the set level heuristic for the planning graph
@@ -191,8 +209,25 @@ class PlanningGraph:
         WARNING: you should expect long runtimes using this heuristic on complex problems
         """
         # TODO: implement setlevel heuristic
-        raise NotImplementedError
-
+        def all_goal_met(layer):
+            for g in self.goal:
+                if g not in layer:
+                    return False
+            return True
+        def goals_are_mutex(layer):
+            for g1,g2 in combinations(self.goal,2):
+                if layer.is_mutex(g1,g2):
+                    return True
+            return False
+        setlevel = 0
+        while not self._is_leveled:
+            layer = self.literal_layers[-1]
+            if all_goal_met(layer) and not goals_are_mutex(layer):
+                return setlevel
+            self._extend()
+            setlevel += 1
+        return -1        
+            
     ##############################################################################
     #                     DO NOT MODIFY CODE BELOW THIS LINE                     #
     ##############################################################################
