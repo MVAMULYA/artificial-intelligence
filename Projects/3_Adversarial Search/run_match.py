@@ -38,7 +38,7 @@ def _run_matches(matches, name, num_processes=NUM_PROCS, debug=False):
     for result in pool.imap_unordered(play, matches):
         print("+" if result[0].name == name else '-', end="")
         results.append(result)
-    print()
+    print(results)
     return results
 
 
@@ -94,6 +94,7 @@ def play_matches(custom_agent, test_agent, cli_args):
     # Run all matches -- must be done before fair matches in order to populate
     # the first move from each player; these moves are reused in the fair matches
     results = _run_matches(matches, custom_agent.name, cli_args.processes)
+    print(results)
 
     if cli_args.fair_matches:
         _matches = make_fair_matches(matches, results)
@@ -106,8 +107,11 @@ def play_matches(custom_agent, test_agent, cli_args):
 def main(args):
     test_agent = TEST_AGENTS[args.opponent.upper()]
     custom_agent = Agent(CustomPlayer, "Custom Agent")
+    print(test_agent)
+    print('====================================')
     wins, num_games = play_matches(custom_agent, test_agent, args)
-
+    print(wins)
+    print(num_games)
     logger.info("Your agent won {:.1f}% of matches against {}".format(
        100. * wins / num_games, test_agent.name))
     print("Your agent won {:.1f}% of matches against {}".format(

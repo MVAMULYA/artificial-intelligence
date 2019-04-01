@@ -47,15 +47,26 @@ class CustomPlayer(DataPlayer):
         import random       
 
         if state.ply_count < 2:
+            print('empty board')
+            print(random.choice(state.actions()))
+            print('!-------------------------!')
             self.queue.put(random.choice(state.actions()))
         else:
             depth_limit = 5
             for depth in range(1, depth_limit + 1):
                 best_move = self.alpha_beta_pruning(state, depth)
-            self.queue.put(best_move)           
+                print(depth)
+                print(best_move)
+            print(depth)
+            print('---------------------------------------------')
+            self.queue.put(best_move)  
+            print(state)         
     def alpha_beta_pruning(self,state,depth):
         def max_value(state,alpha,beta,depth):
-            if state.terminal_test():   return state.utility(self.player_id)
+            if state.terminal_test():
+                print("max value")
+                print(state)
+                return state.utility(self.player_id)
             if depth <= 0: return self.score(state)
             v = float("-inf")
             for a in state.actions():
@@ -64,7 +75,10 @@ class CustomPlayer(DataPlayer):
             alpha = max(alpha,v)
             return v        
         def min_value(state,alpha,beta,depth):
-            if state.terminal_test(): return state.utility(self.player_id)
+            if state.terminal_test():
+                print("min value")
+                print(state)
+                return state.utility(self.player_id)
             if depth <= 0: return self.score(state)
             v = float("-inf")
             for a in state.actions():
