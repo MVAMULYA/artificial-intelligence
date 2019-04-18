@@ -1,10 +1,13 @@
 
 from sample_players import DataPlayer
-from isolation.isolation import _WIDTH, _HEIGHT
 import random
 from isolation import isolation
+import random, math, copy
+CNST = 1.0
+
 
 class CustomPlayer(DataPlayer):
+    
     """ Implement your own agent to play knight's Isolation
 
     The get_action() method is the only required method for this project.
@@ -22,6 +25,7 @@ class CustomPlayer(DataPlayer):
     **********************************************************************
     """
     def get_action(self, state):
+        
         """ Employ an adversarial search technique to choose an action
         available in the current state calls self.queue.put(ACTION) at least
 
@@ -44,46 +48,53 @@ class CustomPlayer(DataPlayer):
         # EXAMPLE: choose a random move without any search--this function MUST
         #          call self.queue.put(ACTION) at least once before time expires
         #          (the timer is automatically managed for you)
-        import random       
-
-        if state.ply_count < 2:
-            print('empty board')
-            print(random.choice(state.actions()))
-            print('!-------------------------!')
-            self.queue.put(random.choice(state.actions()))
+        import random      
+        
+        if state.ply_count < 4:
+            if state in self.data:
+                best_move = self.data[state]
+                self.queue.put(best_move)
+            else:
+                best_move = random.choice(state.actions())
+                self.queue.put(best_move)             
         else:
             depth_limit = 5
             for depth in range(1, depth_limit + 1):
                 best_move = self.alpha_beta_pruning(state, depth)
-                print(depth)
-                print(best_move)
-            print(depth)
-            print('---------------------------------------------')
-            self.queue.put(best_move)  
-            print(state)         
+            self.queue.put(best_move) 
+        self.context = best_move
+
+      
+    def my_moves(self,state):
+        own_loc = state.locs[self.player_id]
+        opp_loc = state.locs[1 - self.player_id]
+        own_liberties = state.liberties(own_loc)
+        opp_liberties = state.liberties(opp_loc)
+        return len(own_liberties) - len(opp_liberties)
+   
     def alpha_beta_pruning(self,state,depth):
         def max_value(state,alpha,beta,depth):
             if state.terminal_test():
-                print("max value")
-                print(state)
                 return state.utility(self.player_id)
-            if depth <= 0: return self.score(state)
+            if depth <= 0:
+                return self.my_moves(state)
             v = float("-inf")
             for a in state.actions():
                 v = max(v, min_value(state.result(a),alpha,beta,depth-1))
-            if v >=beta: return v
+            if v >= beta:
+                return v
             alpha = max(alpha,v)
             return v        
         def min_value(state,alpha,beta,depth):
             if state.terminal_test():
-                print("min value")
-                print(state)
                 return state.utility(self.player_id)
-            if depth <= 0: return self.score(state)
-            v = float("-inf")
+            if depth <= 0:
+                return self.my_moves(state)
+            v = float("inf")
             for a in state.actions():
                 v = min(v, max_value(state.result(a),alpha,beta,depth-1))
-            if v <= alpha:return v
+            if v <= alpha:
+                return v
             beta = min(beta,v)
             return v
         
@@ -97,20 +108,114 @@ class CustomPlayer(DataPlayer):
                 best_score = v
                 best_move = a
         return best_move
+        
+class CustomPlayer_MCTS(DataPlayer):
     
-    def distance(self,state):
-        own_loc = state.locs[state.ply_count % 2]
-        x_player, y_player = own_loc // (_WIDTH + 2), own_loc % (_WIDTH + 2)
-        return min(x_player, _WIDTH + 1 - x_player, y_player, _HEIGHT - 1 - y_player)
-    
-    def score(self,state):
-        own_loc = state.locs[self.player_id]
-        opp_loc = state.locs[1 - self.player_id]
-        own_liberties = state.liberties(own_loc)
-        opp_liberties = state.liberties(opp_loc)
-        dis = self.distance(state)
-        if dis >= 2:
-            return 2*len(own_liberties) - len(opp_liberties)
+    def get_action(self, state):
+        if state.ply_count < 2:
+            best_move = random.choice(state.actions())
+            self.queue.put(best_move)             
         else:
-            return len(own_liberties) - len(opp_liberties)
+            computational_limit = 500
+            best_move = self.mct_search(state,computational_limit)
+            self.queue.put(best_move) 
+        self.context = best_move
+    
+    def mct_search(self,state,computational_limit):
+        root = Node(state)
+        if root.state.terminal_test():
+            return random.choice(state.actions())
+        for i in range(computational_limit):
+            child = tree_policy(root)
+            if not child:
+                continue
+            reward = default_policy(child.state)
+            backup(child,reward)
+        best_child_index = root.children.index(best_child(root))
+        return root.child_actions[best_child_index]
+
+class Node():
+    def __init__(self, state,parent=None):
+        self.visits = 1
+        self.action = 1
+        self.reward = 0.0
+        self.state = state
+        self.parent = parent
+        self.children = []
+        self.child_actions = []
+        
+    def update(self,reward):
+        self.reward += reward
+        self.visits += 1
+            
+    def add_child(self, child_state,action):
+        child = Node(child_state, self)
+        self.children.append(child)
+        self.child_actions.append(action)
+        
+    def fully_explored(self):
+        return len(self.child_actions) == len(self.state.actions())
+        
+def expand(node):
+    for s_action in node.state.actions():
+        if s_action not in node.child_actions:
+            e_state = node.state.result(s_action)
+            node.add_child(e_state, s_action)
+            return node.children[-1]
+        
+def best_child(node):
+    best_score = float("-inf")
+    best_children = []
+    for child in node.children:
+        exploit = child.reward / child.visits
+        explore = math.sqrt(2.0 * math.log(node.visits) / child.visits)
+        score = exploit + CNST * explore
+        if score == best_score:
+            best_children.append(child)
+        elif score > best_score:
+            best_children = [child]
+            best_score = score
+    return random.choice(best_children)
+    
+def tree_policy(node):
+    while not node.state.terminal_test():
+        if not node.fully_explored():
+            return expand(node)
+        else:
+            node = best_child(node)
+    return node
+
+
+def default_policy(state):
+    cur_state = copy.deepcopy(state)
+    while not state.terminal_test():
+        action = random.choice(state.actions())
+        state = state.result(action)
+    if state._has_liberties(cur_state.player()):
+        return -1
+    else:
+        return 1
+
+def backup(node, reward):
+    while node != None:
+        node.update(reward)
+        node = node.parent
+        reward *= -1
+               
+        
+    
+            
+            
+                    
+                    
+            
+            
+        
+    
+
+
+    
+    
+
+    
     
