@@ -50,7 +50,7 @@ class CustomPlayer(DataPlayer):
         #          (the timer is automatically managed for you)
         import random      
         
-        if state.ply_count < 4:
+        if state.ply_count < 2:
             if state in self.data:
                 best_move = self.data[state]
                 self.queue.put(best_move)
@@ -58,19 +58,19 @@ class CustomPlayer(DataPlayer):
                 best_move = random.choice(state.actions())
                 self.queue.put(best_move)             
         else:
-            depth_limit = 5
-            for depth in range(1, depth_limit + 1):
+            depth_limit = 75
+            for depth in range(0, depth_limit):
                 best_move = self.alpha_beta_pruning(state, depth)
-            self.queue.put(best_move) 
+                self.queue.put(best_move) 
         self.context = best_move
-
+    
       
     def my_moves(self,state):
         own_loc = state.locs[self.player_id]
         opp_loc = state.locs[1 - self.player_id]
         own_liberties = state.liberties(own_loc)
         opp_liberties = state.liberties(opp_loc)
-        return len(own_liberties) - len(opp_liberties)
+        return 2*len(own_liberties) - len(opp_liberties)
    
     def alpha_beta_pruning(self,state,depth):
         def max_value(state,alpha,beta,depth):
@@ -107,7 +107,10 @@ class CustomPlayer(DataPlayer):
             if v > best_score:
                 best_score = v
                 best_move = a
+        
         return best_move
+        
+        
         
 class CustomPlayer_MCTS(DataPlayer):
     
@@ -116,7 +119,7 @@ class CustomPlayer_MCTS(DataPlayer):
             best_move = random.choice(state.actions())
             self.queue.put(best_move)             
         else:
-            computational_limit = 500
+            computational_limit = 75
             best_move = self.mct_search(state,computational_limit)
             self.queue.put(best_move) 
         self.context = best_move
@@ -153,7 +156,7 @@ class Node():
         self.children.append(child)
         self.child_actions.append(action)
         
-    def fully_explored(self):
+    def fully_expanded(self):
         return len(self.child_actions) == len(self.state.actions())
         
 def expand(node):
@@ -167,19 +170,17 @@ def best_child(node):
     best_score = float("-inf")
     best_children = []
     for child in node.children:
-        exploit = child.reward / child.visits
-        explore = math.sqrt(2.0 * math.log(node.visits) / child.visits)
-        score = exploit + CNST * explore
-        if score == best_score:
+        UCT_score = (child.reward / child.visits) + CNST * (math.sqrt(2.0 * math.log(node.visits) / child.visits))
+        if UCT_score == best_score:
             best_children.append(child)
-        elif score > best_score:
+        elif UCT_score > best_score:
             best_children = [child]
-            best_score = score
+            best_score = UCT_score
     return random.choice(best_children)
     
 def tree_policy(node):
     while not node.state.terminal_test():
-        if not node.fully_explored():
+        if not node.fully_expanded():
             return expand(node)
         else:
             node = best_child(node)
